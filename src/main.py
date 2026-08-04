@@ -29,8 +29,8 @@ HEADERS = {
     "X-Requested-With": "XMLHttpRequest"
 }
 
-# Regex para telefones brasileiros
-PHONE_REGEX = r"(?:\+?55\s?)?(?:\(?\d{2}\)?[\s-]?)(?:9\s?\d{4}[\s-]?\d{4}|\d{4}[\s-]?\d{4})"
+# Regex para telefones (brasileiros e internacionais)
+PHONE_REGEX = r"(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{2,3}\)?[\s-]?)?(?:[9]\s?\d{4}[\s-]?\d{4}|\d{4}[\s-]?\d{4})"
 
 # Modelos Pydantic
 class ScrapeRequest(BaseModel):
@@ -58,10 +58,22 @@ class ScrapeResponse(BaseModel):
 
 # Funções auxiliares
 def clean_phone(phone: str) -> str:
-    """Normaliza número de telefone para formato +55 DDD 9XXXX-XXXX"""
+    """Normaliza número de telefone para formato +55 DDD 9XXXX XXXX ou mantém formato internacional"""
     digits = re.sub(r"[^\d]", "", phone)
-    if len(digits) == 11:
-        return f"+55 {digits[:2]} {digits[2:7]}-{digits[7:]}"
+    
+    # Se for número brasileiro (começa com 55 ou tem 11 dígitos)
+    if digits.startswith('55') and len(digits) == 13:
+        return f"+{digits[:2]} {digits[2:4]} {digits[4:9]} {digits[9:]}"
+    elif len(digits) == 11 and not phone.startswith('+'):
+        return f"+55 {digits[:2]} {digits[2:7]} {digits[7:]}"
+    elif len(digits) in (8, 9) and not phone.startswith('+'):
+        return digits
+    
+    # Para números incompletos (menos de 8 dígitos), remove todos os não-dígitos
+    elif len(digits) < 8:
+        return digits
+    
+    # Para números internacionais, mantém o formato original
     return phone
 
 async def search_products(keyword: str, client: httpx.AsyncClient) -> List[int]:
